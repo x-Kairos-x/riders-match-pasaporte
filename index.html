@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0B0A0A">
+<title>Pasaporte de moto · Riders Match</title>
+<style>
+  :root { --bg: #0B0A0A; --card: #161415; --borde: #2A2628; --texto: #F4F1F1; --gris: #A9A3A5; --rojo: #D62839; --rojo-suave: #3A0F15; --verde: #2FBF71; --verde-suave: #0F2A1C; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--texto); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.45; }
+  main { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
+  .marca { color: var(--gris); font-size: 12px; letter-spacing: 3px; text-transform: uppercase; text-align: center; margin-bottom: 14px; }
+  .marca b { color: var(--rojo); }
+  .tarjeta { background: var(--card); border: 1px solid var(--borde); border-radius: 22px; padding: 18px; margin-bottom: 14px; }
+  .estado { text-align: center; border-radius: 22px; padding: 22px 16px; margin-bottom: 14px; border: 1px solid; }
+  .estado.robo { background: var(--rojo-suave); border-color: var(--rojo); box-shadow: 0 0 24px #D6283955; }
+  .estado.ok { background: var(--verde-suave); border-color: var(--verde); }
+  .estado .icono { font-size: 44px; }
+  .estado h1 { margin: 6px 0 4px; font-size: 26px; letter-spacing: 1px; text-transform: uppercase; }
+  .estado p { margin: 0; color: var(--gris); font-size: 14px; }
+  .moto { font-size: 22px; font-weight: 800; margin: 0 0 4px; }
+  .dato { color: var(--gris); font-size: 14px; margin: 2px 0; }
+  .dato b { color: var(--texto); }
+  h2 { font-size: 17px; margin: 0 0 8px; }
+  textarea { width: 100%; min-height: 80px; resize: vertical; background: var(--bg); color: var(--texto); border: 1px solid var(--borde); border-radius: 14px; padding: 12px; font: inherit; }
+  label.check { display: flex; gap: 10px; align-items: center; margin: 10px 0; color: var(--gris); font-size: 14px; }
+  label.check input { width: 20px; height: 20px; accent-color: var(--rojo); }
+  .boton { display: block; width: 100%; text-align: center; border: 0; border-radius: 16px; padding: 15px; font: inherit; font-weight: 800; font-size: 16px; cursor: pointer; text-decoration: none; margin-top: 8px; }
+  .primario { background: var(--rojo); color: #fff; }
+  .secundario { background: transparent; color: var(--texto); border: 1px solid var(--borde); }
+  .boton:disabled { opacity: .5; }
+  .nota { color: var(--gris); font-size: 12px; text-align: center; margin-top: 10px; }
+  .mensaje { margin-top: 10px; font-size: 14px; text-align: center; }
+  .oculto { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <div class="marca">Pasaporte de moto · <b>Riders Match</b></div>
+  <div id="cargando" class="tarjeta" style="text-align:center">Revisando el pasaporte…</div>
+  <div id="error" class="tarjeta oculto" style="text-align:center"></div>
+
+  <section id="contenido" class="oculto">
+    <div id="estado" class="estado"></div>
+    <div class="tarjeta">
+      <p id="moto" class="moto"></p>
+      <p id="detalles" class="dato"></p>
+      <div id="robo" class="oculto">
+        <p id="desde" class="dato"></p>
+        <p id="lugar" class="dato"></p>
+        <p id="denuncia" class="dato"></p>
+      </div>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Avisar al dueño</h2>
+      <p class="dato">El dueño recibe tu aviso en su app. No verás sus datos ni él los tuyos.</p>
+      <textarea id="texto" maxlength="200" placeholder="Ej: La vi estacionada en Av. Providencia con Los Leones."></textarea>
+      <label class="check"><input type="checkbox" id="ubicacion"> Compartir dónde estoy ahora (la ubicación de la moto)</label>
+      <button id="avisar" class="boton primario">Avisar al dueño</button>
+      <p id="resultado" class="mensaje"></p>
+    </div>
+
+    <a class="boton secundario" href="tel:133">🚓 Llamar a Carabineros (133)</a>
+    <p class="nota">Si crees que la moto es robada, no te acerques ni intentes recuperarla: llama al 133.</p>
+  </section>
+  <p class="nota">El estado lo informa el dueño en Riders Match; la app no verifica denuncias con la policía.</p>
+</main>
+<script>
+  const URL_SUPABASE = 'https://aexirailbnlxzappkwyi.supabase.co';
+  const LLAVE = 'sb_publishable_Boxk0R_xeXEt4q6tlUIT1Q_ZKDUN5XW';
+  const codigo = (new URLSearchParams(location.search).get('m') || '').toLowerCase();
+  const $ = (id) => document.getElementById(id);
+  const rpc = (nombre, cuerpo) =>
+    fetch(`${URL_SUPABASE}/rest/v1/rpc/${nombre}`, {
+      method: 'POST',
+      headers: { apikey: LLAVE, Authorization: `Bearer ${LLAVE}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo),
+    }).then(async (r) => ({ ok: r.ok, datos: await r.json().catch(() => null) }));
+  const fecha = (iso) => new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  function falla(texto) { $('cargando').classList.add('oculto'); $('error').textContent = texto; $('error').classList.remove('oculto'); }
+
+  async function cargar() {
+    if (!/^[0-9a-f]{32}$/.test(codigo)) return falla('Este enlace no es un pasaporte válido.');
+    const r = await rpc('pasaporte_moto', { p_codigo: codigo }).catch(() => ({ ok: false }));
+    if (!r.ok) return falla('No se pudo revisar el pasaporte. Revisa tu conexión e intenta de nuevo.');
+    const m = Array.isArray(r.datos) ? r.datos[0] : null;
+    if (!m) return falla('Este pasaporte no existe o el dueño lo desactivó.');
+    $('moto').textContent = `${m.marca} ${m.modelo}`;
+    const seguro = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    $('detalles').innerHTML = [m.anio && `Año <b>${seguro(m.anio)}</b>`, m.color && `Color <b>${seguro(m.color)}</b>`].filter(Boolean).join(' · ') || 'Moto registrada en Riders Match';
+    const e = $('estado');
+    if (m.robada) {
+      e.className = 'estado robo';
+      e.innerHTML = '<div class="icono">🚨</div><h1>Vehículo con encargo por robo</h1><p>El dueño informó el robo en Riders Match.</p>';
+      $('robo').classList.remove('oculto');
+      $('desde').textContent = m.robada_desde ? `Robada el ${fecha(m.robada_desde)}` : '';
+      $('lugar').textContent = m.lugar ? `Lugar: ${m.lugar}` : '';
+      $('denuncia').textContent = m.denuncia ? `Denuncia N° ${m.denuncia} (informada por el dueño)` : '';
+    } else {
+      e.className = 'estado ok';
+      e.innerHTML = '<div class="icono">✅</div><h1>Sin encargo por robo</h1><p>El dueño no ha informado un robo de esta moto.</p>';
+    }
+    $('cargando').classList.add('oculto');
+    $('contenido').classList.remove('oculto');
+  }
+
+  function ubicacion() {
+    return new Promise((ok) => {
+      if (!$('ubicacion').checked || !navigator.geolocation) return ok(null);
+      navigator.geolocation.getCurrentPosition((p) => ok(p.coords), () => ok(null), { enableHighAccuracy: true, timeout: 10000 });
+    });
+  }
+
+  $('avisar').addEventListener('click', async () => {
+    const boton = $('avisar');
+    boton.disabled = true;
+    $('resultado').textContent = 'Enviando…';
+    const c = await ubicacion();
+    const r = await rpc('avisar_dueno_pasaporte', {
+      p_codigo: codigo,
+      p_mensaje: $('texto').value.trim() || null,
+      p_lat: c ? Number(c.latitude.toFixed(5)) : null,
+      p_lng: c ? Number(c.longitude.toFixed(5)) : null,
+    }).catch(() => ({ ok: false }));
+    if (r.ok) {
+      $('resultado').textContent = '✅ ¡Listo! El dueño recibió tu aviso. Gracias por ayudar.';
+      $('texto').value = '';
+    } else {
+      $('resultado').textContent = (r.datos && r.datos.message) || 'No se pudo enviar. Intenta de nuevo.';
+      boton.disabled = false;
+    }
+  });
+
+  cargar();
+</script>
+</body>
+</html>
